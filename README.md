@@ -2,7 +2,7 @@
 
 A production-ready AI customer support system with RAG (Retrieval Augmented Generation), sentiment analysis, and intelligent escalation.
 
-## ✨ Features
+## Features
 
 - 🧠 **Intelligent Support Agent** - Powered by LLMs (Ollama/GPT/Gemini/Claude)
 - 📚 **RAG Knowledge Base** - Semantic search over documentation
@@ -13,7 +13,7 @@ A production-ready AI customer support system with RAG (Retrieval Augmented Gene
 - 🌐 **REST API** - FastAPI backend with OpenAPI docs
 - 📊 **Analytics** - Track sentiment, resolution rates, and performance
 
-## 🏗️ Architecture
+## Architecture
 User → FastAPI → Support Agent → MCP Server → Tools → Response
 ↓                ↓
 Sentiment      Knowledge Base
@@ -22,7 +22,7 @@ Analysis         (ChromaDB)
 Escalation
 Logic
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 
@@ -60,7 +60,7 @@ cp .env.example .env
 python scripts/quick_start.py
 ```
 
-## 🔧 Manual Setup
+## Manual Setup
 
 ### Step 1: Setup Database
 ```bash
@@ -77,7 +77,7 @@ python scripts/load_knowledge.py
 python scripts/run_server.py
 ```
 
-## 📡 API Usage
+## API Usage
 
 ### Chat Endpoint
 
@@ -114,7 +114,7 @@ curl -X POST "http://localhost:8000/api/chat/" \
 
 Visit `http://localhost:8000/docs` for interactive API documentation.
 
-## 🧪 Testing
+## Testing
 
 ### Run automated tests
 ```bash
@@ -126,7 +126,7 @@ python scripts/test_agent.py
 python scripts/test_agent.py --interactive
 ```
 
-## 📊 Configuration
+## Configuration
 
 ### LLM Options (choose one)
 
@@ -179,7 +179,7 @@ docker-compose up -d
 - SQL injection protection via ORM
 - Input validation with Pydantic
 
-## 📈 Performance
+## Performance
 
 - **Response Time**: 1-3 seconds (with Ollama)
 - **Throughput**: 10-50 req/sec
