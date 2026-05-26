@@ -1,0 +1,34 @@
+Frequently Asked Questions
+
+Q: How do I create an account?
+A: Visit our signup page, enter your email and create a password. You'll receive a verification email to activate your account.
+
+Q: Is there a free trial?
+A: Yes! We offer a 14-day free trial with full access to all features. No credit card required.
+
+Q: Can I change my plan later?
+A: Absolutely! You can upgrade or downgrade your plan anytime from the billing settings.
+
+Q: Do you offer refunds?
+A: We have a 30-day money-back guarantee for all new subscriptions.
+
+Q: How do I contact support?
+A: You can reach us via:
+- Email: support@example.com
+- Live chat (available 24/7 in the app)
+- Phone: 1-800-SUPPORT
+
+Q: What payment methods do you accept?
+A: We accept all major credit cards, PayPal, and bank transfers for enterprise customers.
+
+Q: Is my data secure?
+A: Yes, we use 256-bit SSL encryption and are SOC 2 Type II certified.
+
+Q: Can I invite team members?
+A: Yes, on Pro and Enterprise plans you can invite unlimited team members.
+
+Q: Where can I find video tutorials?
+A: Visit our YouTube channel or check help.example.com/tutorials
+
+Q: Do you have a mobile app?
+A: Yes, available on iOS and Android. Download from the App Store or Google Play.
