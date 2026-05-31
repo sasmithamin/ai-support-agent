@@ -20,16 +20,24 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan events"""
-    # Startup
     logger.info("Starting AI Support Agent...")
+    
+    # Initialize database
     await init_db()
-    logger.info("Database initialized")
+    
+    # Verify connection
+    from src.db.database import check_db_connection
+    if await check_db_connection():
+        logger.info("✅ PostgreSQL connection verified")
+    else:
+        logger.error("❌ PostgreSQL connection failed!")
     
     yield
     
-    # Shutdown
-    logger.info("Shutting down AI Support Agent...")
+    # Cleanup on shutdown
+    from src.db.database import close_db
+    await close_db()
+    logger.info("✅ Shutdown complete")
 
 
 # Create FastAPI app
