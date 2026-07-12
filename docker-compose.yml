@@ -1,26 +1,106 @@
-version: '3.8'
 
-services:
-  app:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/support_agent.db
-      - USE_LOCAL_LLM=True
-      - OLLAMA_BASE_URL=http://ollama:11434
-    volumes:
-      - ./data:/app/data
-      - ./.env:/app/.env
-    depends_on:
-      - ollama
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
+networks:
+  support_network:
+    driver: bridge
 
 volumes:
+  postgres_data:
   ollama_data:
+  chroma_data:
+
+services:
+
+  # ── 1. PostgreSQL ───────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: support_postgres
+    restart: unless-stopped
+    
+    environment:
+      POSTGRES_DB: support_db
+      POSTGRES_USER: support_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    
+    ports:
+      - "5432:5432"
+    
+    networks:
+      - support_network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support_user -d support_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── 2. Ollama ───────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: support_ollama
+    restart: unless-stopped
+    
+    volumes:
+      - ollama_data:/root/.ollama
+    
+    ports:
+      - "11434:11434"
+    
+    networks:
+      - support_network
+    
+    # ✅ Simple start - no model download here
+    # We pull model separately after container starts
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10                
+      start_period: 60s
+      # ↑ Give Ollama 60 seconds before first health check
+
+  # ── 3. FastAPI App ──────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: support_app
+    restart: unless-stopped
+    
+    env_file:
+      - .env
+    
+    environment:
+      DATABASE_URL: postgresql+asyncpg://support_user:${POSTGRES_PASSWORD}@postgres:5432/support_db
+      OLLAMA_BASE_URL: http://ollama:11434
+    
+    volumes:
+      - chroma_data:/app/data/chroma_db
+      - ./logs:/app/logs
+      - ./data/knowledge_base:/app/data/knowledge_base
+    
+    ports:
+      - "8000:8000"
+    
+    networks:
+      - support_network
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+        # ✅ Changed from service_healthy to service_started
+        # App starts when Ollama starts, not when fully healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

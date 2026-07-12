@@ -3,9 +3,6 @@ Main support agent for handling customer queries
 """
 from typing import Dict, Any, List, Optional
 import logging
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage
 
 from src.utils.llm_factory import get_llm
 from src.utils.prompt_templates import SUPPORT_AGENT_SYSTEM_PROMPT
@@ -26,8 +23,6 @@ class SupportAgent:
         self.sentiment_agent = get_sentiment_agent()
         self.escalation_agent = get_escalation_agent()
         self.conversation_history: List[Dict[str, str]] = []
-        
-        # Get tools from MCP server
         self.tools = self.mcp_server.tools_registry.get_all_tools()
         
         logger.info(f"Support agent initialized with {len(self.tools)} tools")
@@ -40,14 +35,6 @@ class SupportAgent:
     ) -> Dict[str, Any]:
         """
         Process a customer message and generate response
-        
-        Args:
-            user_message: Customer's message
-            user_id: Optional user identifier
-            ticket_id: Optional existing ticket ID
-            
-        Returns:
-            Dictionary with response and metadata
         """
         try:
             logger.info(f"Processing message: '{user_message[:50]}...'")
@@ -71,7 +58,7 @@ class SupportAgent:
                 query=user_message
             )
             
-            # Create agent with tools
+            # Execute agent
             agent_response = self._execute_agent(prompt)
             
             # Add response to history
@@ -80,10 +67,10 @@ class SupportAgent:
                 "content": agent_response
             })
             
-            # Calculate confidence (simplified - based on response length and keywords)
+            # Calculate confidence
             confidence = self._calculate_confidence(agent_response, sentiment_result)
             
-            # Check if escalation needed
+            # Check escalation
             escalation_result = self.escalation_agent.should_escalate(
                 subject=user_message[:100],
                 description=user_message,
@@ -105,50 +92,46 @@ class SupportAgent:
             logger.error(f"Error processing message: {e}", exc_info=True)
             return {
                 "response": (
-                    "I apologize, but I encountered an error processing your request. "
-                    "Let me connect you with a human agent who can help you better."
+                    "I apologize, but I encountered an error. "
+                    "Let me connect you with a human agent."
                 ),
-                "sentiment": {"sentiment": "neutral", "score": 0.0},
+                "sentiment": {"sentiment": "neutral", "score": 0.0,
+                             "urgency": "medium", "emotion": "neutral",
+                             "escalation_recommended": False},
                 "confidence": 0.0,
                 "escalation": {
                     "should_escalate": True,
                     "reason": "System error",
-                    "priority": "high"
+                    "priority": "high",
+                    "suggested_team": "technical"
                 },
                 "tools_used": []
             }
     
     def _execute_agent(self, prompt: str) -> str:
-        """
-        Execute agent with tools
-        
-        Args:
-            prompt: Formatted prompt with context
-            
-        Returns:
-            Agent response
-        """
+        """Execute agent with tools"""
         try:
-            # For simplicity, we'll use a basic approach
-            # In production, you'd use LangChain's AgentExecutor with ReAct pattern
+            # Search knowledge base for relevant info
+            knowledge_result = None
+            keywords = ['how', 'what', 'where', 'when', 'why',
+                       'help', 'issue', 'problem', 'error', 'cant',
+                       "can't", 'not working', 'failed']
             
-            # First, try to search knowledge base
-            knowledge_search_result = None
-            if any(keyword in prompt.lower() for keyword in ['how', 'what', 'where', 'when', 'why', 'help', 'issue', 'problem']):
+            if any(kw in prompt.lower() for kw in keywords):
                 try:
                     from src.tools.knowledge_search import get_knowledge_search_tool
                     knowledge_tool = get_knowledge_search_tool()
-                    knowledge_search_result = knowledge_tool.run(prompt)
+                    knowledge_result = knowledge_tool.run(prompt)
                     logger.info("Knowledge search executed")
                 except Exception as e:
                     logger.warning(f"Knowledge search failed: {e}")
             
-            # Build enhanced prompt with knowledge if found
+            # Build enhanced prompt
             enhanced_prompt = prompt
-            if knowledge_search_result and "No relevant information found" not in knowledge_search_result:
-                enhanced_prompt += f"\n\nKnowledge Base Search Results:\n{knowledge_search_result}"
+            if knowledge_result and "No relevant information" not in knowledge_result:
+                enhanced_prompt += f"\n\nKnowledge Base Results:\n{knowledge_result}"
             
-            # Generate response using LLM
+            # Generate response
             response = self.llm.invoke(enhanced_prompt)
             
             if hasattr(response, 'content'):
@@ -158,20 +141,17 @@ class SupportAgent:
         except Exception as e:
             logger.error(f"Agent execution error: {e}")
             return (
-                "I'm having trouble processing your request right now. "
-                "Could you please rephrase your question, or would you like me "
-                "to connect you with a human agent?"
+                "I'm having trouble processing your request. "
+                "Could you rephrase, or would you like to speak with a human agent?"
             )
     
     def _format_conversation_history(self, max_messages: int = 10) -> str:
         """Format conversation history for context"""
-        recent_history = self.conversation_history[-max_messages:]
-        
+        recent = self.conversation_history[-max_messages:]
         formatted = []
-        for msg in recent_history:
+        for msg in recent:
             role = "Customer" if msg["role"] == "user" else "Assistant"
             formatted.append(f"{role}: {msg['content']}")
-        
         return "\n".join(formatted) if formatted else "No previous conversation"
     
     def _calculate_confidence(
@@ -179,50 +159,34 @@ class SupportAgent:
         response: str,
         sentiment: Dict[str, Any]
     ) -> float:
-        """
-        Calculate confidence score for the response
+        """Calculate confidence score"""
+        confidence = 0.7
         
-        Args:
-            response: Agent's response
-            sentiment: Sentiment analysis result
-            
-        Returns:
-            Confidence score (0-1)
-        """
-        confidence = 0.7  # Base confidence
-        
-        # Lower confidence if response is too short
         if len(response) < 50:
             confidence -= 0.2
         
-        # Lower confidence if response contains uncertainty phrases
         uncertainty_phrases = [
-            "i'm not sure", "i don't know", "unclear", "uncertain",
-            "might be", "possibly", "perhaps", "maybe"
+            "i'm not sure", "i don't know", "unclear",
+            "uncertain", "might be", "possibly", "perhaps", "maybe"
         ]
         if any(phrase in response.lower() for phrase in uncertainty_phrases):
             confidence -= 0.3
         
-        # Higher confidence if response is detailed
         if len(response) > 200:
             confidence += 0.1
         
-        # Adjust based on sentiment
         if sentiment.get("score", 0) < -0.3:
-            confidence -= 0.1  # Lower confidence for negative sentiment
+            confidence -= 0.1
         
         return max(0.0, min(1.0, confidence))
     
     def _extract_tools_used(self, response: str) -> List[str]:
-        """Extract which tools were used (simplified)"""
+        """Extract which tools were used"""
         tools_used = []
-        
-        if "knowledge base" in response.lower() or "documentation" in response.lower():
+        if "knowledge base" in response.lower():
             tools_used.append("knowledge_search")
-        
-        if "searched" in response.lower() or "found online" in response.lower():
+        if "searched" in response.lower():
             tools_used.append("web_search")
-        
         return tools_used
     
     def clear_history(self):
