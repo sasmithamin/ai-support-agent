@@ -7,8 +7,9 @@ from contextlib import asynccontextmanager
 import logging
 
 from config.settings import settings
-from src.db.database import init_db
+from src.db.database import init_db, check_db_connection, close_db
 from src.api.routes import chat, tickets, knowledge
+
 
 # Configure logging
 logging.basicConfig(
@@ -75,8 +76,12 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+    """Health check with database status"""
+    db_ok = await check_db_connection()
+    return {
+        "status": "healthy" if db_ok else "degraded",
+        "database": "connected" if db_ok else "disconnected"
+    }
 
 
 if __name__ == "__main__":
